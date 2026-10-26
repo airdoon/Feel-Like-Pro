@@ -1,67 +1,70 @@
-# Feel Like Pro — real authentication starter
+# Feel Like Pro
 
-This package keeps the existing Feel Like Pro HTML design and adds a Node.js backend for Google OAuth, Telegram Login Widget validation, Steam OpenID, server sessions, `/api/me`, and logout.
+Веб-платформа для киберспортивных турниров: вход через Telegram, команды, заявки, модерация, сетки Single/Double Elimination, новости, зал славы и поиск игроков.
 
-> This is an authentication starter, not a finished production account platform. It does not yet persist user profiles in a database or merge identities from different providers. Logging in with Google and later Steam currently produces different provider identities; account linking needs a deliberate verified flow and database schema.
+## Что реализовано
 
-## Requirements
-- Node.js 20 or newer
-- Google OAuth Web client (for Google)
-- Telegram bot from `@BotFather` (for Telegram)
-- Steam Web API key (for profile details and the Steam strategy setup)
+- Вход через Telegram Login Widget с серверной проверкой HMAC и срока действия. Профиль сохраняется в PostgreSQL, сессия хранится там же.
+- Администраторы назначаются через список Telegram ID в `TELEGRAM_ADMIN_IDS`. Проверки прав выполняются сервером.
+- Новости с черновиками и публикацией, турниры с правилами и призами, командные и сольные заявки.
+- Команды: создание капитаном, вступление по коду, смена кода, управление составом.
+- Модерация заявок со снимком состава после одобрения.
+- Генерация сетки Single/Double Elimination для 2, 4, 8, 16 и 32 одобренных участников. В Double Elimination при победе участника нижней сетки в первом гранд-финале добавляется второй финал.
+- Ввод результатов администратором, автоматическое продвижение участников, публикация победителей с историческим составом.
+- Свободные игроки с MMR, ролью, героями и прямой ссылкой на Telegram при согласии на публикацию контакта.
 
-## 1. Run locally
-1. Extract the ZIP.
-2. Open a terminal in this folder.
-3. Run `npm install`.
-4. Copy `.env.example` to `.env`.
-5. Set `SESSION_SECRET` to a random secret of at least 32 characters. Example generation: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
-6. Set `BASE_URL=http://localhost:3000`.
-7. Fill provider credentials as described below.
-8. Run `npm start` and open `http://localhost:3000`.
+## Запуск на VPS
 
-## 2. Google OAuth
-1. Open Google Cloud Console and create/select a project.
-2. Configure the OAuth consent screen / Google Auth Platform.
-3. Create an OAuth client ID of type **Web application**.
-4. Add `http://localhost:3000` to Authorized JavaScript origins.
-5. Add `http://localhost:3000/auth/google/callback` to Authorized redirect URIs.
-6. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-7. For production, replace localhost with your HTTPS domain and update the callback URL in Google Console and `BASE_URL`.
+Нужны Linux VPS (рекомендуется 2 vCPU / 4 ГБ RAM), домен, Docker Engine и Docker Compose plugin. DNS-запись `A` домена должна указывать на IP сервера; извне открыты TCP 80 и 443.
 
-Official guide: https://supabase.com/docs/guides/auth/social-login/auth-google (general Google OAuth setup; this starter uses Passport directly).
+1. Скопируйте проект на сервер и откройте папку `feel_like_pro_auth`.
+2. Скопируйте `.env.example` в `.env` и заполните все значения. `DOMAIN` — только имя домена, `BASE_URL` — тот же домен с `https://`. Пароль PostgreSQL используйте длинный, из букв и цифр. `SESSION_SECRET` — случайная строка от 32 символов. Настоящий `.env` не попадает в Git или Docker image.
+3. Создайте Telegram-бота через `@BotFather`, укажите домен командой `/setdomain`, заполните `TELEGRAM_BOT_TOKEN` и `TELEGRAM_BOT_USERNAME`. Укажите собственный числовой Telegram ID в `TELEGRAM_ADMIN_IDS`. Без этого списка никто не получит доступ к админке.
+4. Запустите `docker compose up -d --build`. Приложение при запуске применяет `schema.sql`; Caddy запрашивает HTTPS-сертификат и проксирует трафик. Данные PostgreSQL и сертификаты находятся в именованных Docker volumes.
+5. Проверьте `https://ваш-домен/health`, вход через Telegram, создание черновика и полный цикл тестового турнира.
 
-## 3. Telegram Login
-1. Message `@BotFather`, create a bot, and copy its token into `TELEGRAM_BOT_TOKEN`.
-2. Set `TELEGRAM_BOT_USERNAME` to the bot username without `@`.
-3. In BotFather, use `/setdomain` and set the exact domain that will host the site. For local testing, Telegram's widget may require a publicly reachable domain; test on a deployed HTTPS domain or tunnel if localhost is rejected.
-4. The widget needs to be inserted into the page using the configured bot username. The server endpoint `/auth/telegram` validates the signature and rejects payloads older than five minutes.
+Просмотр журналов: `docker compose logs -f app caddy db`. Перезапуск после обновления файлов: `docker compose up -d --build`.
 
-Official guide: https://core.telegram.org/widgets/login/
+## Резервные копии
 
-## 4. Steam OpenID
-1. Get a Steam Web API key at https://steamcommunity.com/dev/apikey (Steam OpenID identity itself uses Steam's OpenID endpoint).
-2. Set `STEAM_API_KEY` in `.env`.
-3. For local testing, Steam may reject localhost as a realm/return URL. Deploy to a public HTTPS domain or use a suitable public development tunnel, then set `BASE_URL` to that exact origin.
-4. Ensure `BASE_URL` ends up matching the site origin, and that callback URL is `/auth/steam/return`.
+Перед обновлениями и ежедневно сохраняйте дамп вне VPS. Пример ручного дампа из папки проекта на сервере:
 
-Steam documentation: https://partner.steamgames.com/doc/features/auth
+```bash
+docker compose exec -T db pg_dump -U flp -d flp -Fc > flp-$(date +%F).dump
+```
 
-## 5. Production checklist
-- Use HTTPS and a real public domain.
-- Use a strong unique `SESSION_SECRET`; never commit `.env`.
-- Replace the default in-memory Express session store with a persistent production session store (e.g. Redis/Postgres adapter).
-- Add persistent users and profiles, unique provider IDs, verified account-linking flow, CSRF protection for state-changing app actions, rate limiting at the edge, logging and backups.
-- Set `NODE_ENV=production` behind a correctly configured HTTPS reverse proxy.
-- Configure platform callback URLs to match your real deployment domain exactly.
-- Do not make admin status or tournament approvals depend on browser-only state. Enforce roles server-side.
+Файл дампа содержит пользовательские данные: храните его в защищённом внешнем хранилище и регулярно проверяйте восстановление на отдельной базе. Docker volume сам по себе не является резервной копией.
 
-## Routes
-- `GET /auth/google` — start Google sign-in
-- `GET /auth/google/callback` — Google callback
-- `GET /auth/steam` — start Steam sign-in
-- `GET /auth/steam/return` — Steam callback
-- `POST /auth/telegram` — Telegram widget payload validation
-- `GET /api/me` — current session
-- `POST /auth/logout` — end session
-- `GET /health` — server health check
+## Локальная разработка
+
+Требуются Node.js 22+ и PostgreSQL. Скопируйте `.env.example` в `.env`, установите `BASE_URL=http://localhost:3000`, локальную строку `DATABASE_URL`, Telegram credentials. Выполните:
+
+```bash
+npm ci
+npm run migrate
+npm run dev
+npm test
+```
+
+Для работы Telegram Widget тестируйте вход на домене, указанном у бота; `localhost` может не подходить. Остальные страницы можно разрабатывать локально. В production используется HTTPS и cookie с флагом `Secure`.
+
+## Основные API
+
+- `GET /api/me`, `POST /auth/telegram`, `POST /auth/logout`
+- `GET /api/news`, `POST/PATCH/DELETE /api/news`
+- `GET/POST /api/teams`, `POST /api/teams/join`, `GET /api/teams/:id`
+- `GET/PUT /api/free-players[/me]`
+- `GET/POST/PATCH/DELETE /api/tournaments`, `GET /api/tournaments/:id`
+- `POST /api/tournaments/:id/entries`, `POST /api/entries/:id/review`
+- `POST /api/tournaments/:id/bracket`, `POST /api/matches/:id/result`, `POST /api/tournaments/:id/finish`
+- `GET /api/hall`
+
+Изменяющие запросы, кроме Telegram callback, требуют cookie сессии и заголовок `x-csrf-token`, полученный через `GET /api/me`. Для административных маршрутов требуется роль `admin`.
+
+## Ограничения первого релиза
+
+- Сетка создаётся при количестве одобренных участников, равном степени двойки (от 2 до 32). Посев идёт по времени подачи заявки. Выборочный посев и перенос матчей в редакторе пока не предусмотрены.
+- Результат матча после сохранения не редактируется. Это защищает уже рассчитанные зависимые матчи; исправление результата требует отдельной процедуры и не должно делаться напрямую в БД.
+- Вход только через Telegram. Steam можно позже добавить как привязанную личность; веб-вход Steam использует OpenID 2.0.
+- Логотипы и обложки задаются HTTPS-ссылками. Загрузка файлов на сервер не реализована.
+- Для публичной ссылки игроку нужен Telegram username и согласие на публикацию. Telegram не гарантирует наличие username у каждого пользователя.
