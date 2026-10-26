@@ -1,4 +1,7 @@
+const filePreview = location.protocol === 'file:';
 const state = { user: null, csrf: '', config: null, editTournament: null, editNews: null };
+const previewTournament = { id: 'preview', title: 'Пример турнира', game: 'Dota 2', description: 'Здесь появятся опубликованные турниры после запуска платформы.', rules: 'Правила заполняет администратор.', prizes: 'Уточняются', format: 'single', participant_type: 'team', team_size: 5, max_entries: 8, approved_count: 0, status: 'closed', starts_at: new Date(Date.now() + 7 * 86400000).toISOString(), entries: [], matches: [] };
+const previewNews = { id: 'preview', slug: 'preview', title: 'Новости платформы', summary: 'Публикации появятся здесь после запуска сервера.', body: 'Это демонстрация внешнего вида страницы. Для публикации настоящих новостей нужен запущенный сервер.', status: 'published', published_at: new Date().toISOString() };
 const app = document.getElementById('app');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = value => value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
@@ -12,6 +15,17 @@ const area = (name, label, value = '', extra = '') => `<div class="field"><label
 const select = (name, label, values, selected) => `<div class="field"><label for="${name}">${label}</label><select id="${name}" name="${name}">${options(values, selected)}</select></div>`;
 const image = (url, fallback) => url ? `<img class="avatar" src="${esc(url)}" alt="">` : `<div class="avatar">${esc((fallback || '?').slice(0, 1).toUpperCase())}</div>`;
 async function api(url, method = 'GET', body) {
+  if (filePreview) {
+    if (method !== 'GET') throw new Error('Это локальный предпросмотр. Сохранение данных работает после запуска сервера.');
+    if (url === '/api/me') return { user: null, csrf: '' };
+    if (url === '/api/config') return { telegramBotUsername: '' };
+    if (url === '/api/tournaments') return [previewTournament];
+    if (url === '/api/tournaments/preview') return previewTournament;
+    if (url === '/api/news') return [previewNews];
+    if (url === '/api/news/preview') return previewNews;
+    if (url === '/api/hall' || url === '/api/free-players') return [];
+    throw new Error('Этот раздел доступен после запуска сервера.');
+  }
   const res = await fetch(url, { method, credentials: 'same-origin', headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(!['GET', 'HEAD'].includes(method) ? { 'x-csrf-token': state.csrf } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
@@ -41,7 +55,7 @@ window.onTelegramAuth = async user => {
 };
 async function loadWidget() {
   state.config = await api('/api/config');
-  if (!state.config.telegramBotUsername) { document.getElementById('telegramWidget').textContent = 'Вход пока не настроен администратором.'; return; }
+  if (!state.config.telegramBotUsername) { document.getElementById('telegramWidget').textContent = filePreview ? 'Это предпросмотр файла. Вход через Telegram заработает на сайте с HTTPS-доменом.' : 'Вход пока не настроен администратором.'; return; }
   const script = document.createElement('script'); script.async = true;
   script.src = 'https://telegram.org/js/telegram-widget.js?22';
   script.setAttribute('data-telegram-login', state.config.telegramBotUsername);
@@ -124,7 +138,7 @@ async function render() {
   app.innerHTML = '<section class="page"><p class="muted">Загрузка…</p></section>';
   try {
     const html = section === 'home' ? await home() : section === 'news' ? await news() : section === 'article' ? await article(id) : section === 'tournaments' ? await tournaments() : section === 'tournament' ? await tournament(id) : section === 'hall' ? await hall() : section === 'players' ? await players() : section === 'teams' ? await teams() : section === 'team' ? await team(id) : section === 'profile' ? await profile() : section === 'admin' ? await admin() : page('Страница не найдена.', '', '<a class="btn" href="#home">На главную</a>');
-    app.innerHTML = html;
+    app.innerHTML = (filePreview ? '<div class="notice" style="margin-top:20px">Локальный предпросмотр: здесь показан пример оформления. Реальные турниры, аккаунты и заявки работают после запуска сервера с базой данных.</div>' : '') + html;
   } catch (error) { app.innerHTML = page('Не удалось загрузить страницу.', esc(error.message), '<button class="btn" data-action="retry">Повторить</button>'); }
 }
 document.addEventListener('click', async event => {

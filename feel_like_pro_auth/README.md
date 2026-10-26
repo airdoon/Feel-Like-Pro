@@ -37,6 +37,8 @@ docker compose exec -T db pg_dump -U flp -d flp -Fc > flp-$(date +%F).dump
 
 ## Локальная разработка
 
+Если открыть `public/index.html` двойным щелчком, страница покажет только **визуальный предпросмотр** с примерными данными. Регистрация, Telegram-вход и сохранение данных требуют запущенного сервера и PostgreSQL; проверять эти функции через адрес `file://` нельзя.
+
 Требуются Node.js 22+ и PostgreSQL. Скопируйте `.env.example` в `.env`, установите `BASE_URL=http://localhost:3000`, локальную строку `DATABASE_URL`, Telegram credentials. Выполните:
 
 ```bash
