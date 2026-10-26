@@ -20,7 +20,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       BASE_URL: ${BASE_URL:?Set BASE_URL in .env}
       DATABASE_URL: postgres://flp:${POSTGRES_PASSWORD}@db:5432/flp
@@ -28,6 +28,8 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?Set TELEGRAM_BOT_USERNAME in .env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
       TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS:?Set TELEGRAM_ADMIN_IDS in .env}
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s

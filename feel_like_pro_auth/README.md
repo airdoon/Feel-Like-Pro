@@ -39,6 +39,16 @@ docker compose exec -T db pg_dump -U flp -d flp -Fc > flp-$(date +%F).dump
 
 Если открыть `public/index.html` двойным щелчком, страница покажет только **визуальный предпросмотр** с примерными данными. Регистрация, Telegram-вход и сохранение данных требуют запущенного сервера и PostgreSQL; проверять эти функции через адрес `file://` нельзя.
 
+Для бесплатного локального теста через Docker скопируйте `.env.example` в `.env`, установите `NODE_ENV=development`, `BASE_URL=http://localhost:3000`, укажите любые локальные значения `TELEGRAM_*` и `SESSION_SECRET` длиной не менее 32 символов, затем запустите только базу и приложение:
+
+```bash
+docker compose up -d --build db app
+```
+
+Сайт будет доступен на `http://localhost:3000`, проверка сервера — на `http://localhost:3000/health`. Для остановки: `docker compose down`; данные базы сохраняются в Docker volume.
+
+Чтобы проверить настоящий Telegram-вход без VPS, сначала запустите локальный сервер, затем опубликуйте его временным HTTPS-туннелем Cloudflare Quick Tunnel: `cloudflared tunnel --url http://localhost:3000`. Вставьте выданный адрес `https://....trycloudflare.com` в `BASE_URL`, перезапустите `docker compose up -d app`, а в `@BotFather` выполните `/setdomain` и укажите домен без `https://`. Такой адрес временный и меняется после остановки туннеля.
+
 Требуются Node.js 22+ и PostgreSQL. Скопируйте `.env.example` в `.env`, установите `BASE_URL=http://localhost:3000`, локальную строку `DATABASE_URL`, Telegram credentials. Выполните:
 
 ```bash
