@@ -20,7 +20,7 @@ async function api(url, method = 'GET', body) {
 let toastTimer;
 function toast(message) { const el = document.getElementById('toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 4400); }
 function routeParts() { return decodeURIComponent(location.hash.slice(1) || 'home').split('/'); }
-function navigate(hash) { location.hash = hash; if (location.hash === `#${hash}`) render(); }
+function navigate(hash) { if (location.hash === `#${hash}`) render(); else location.hash = hash; }
 async function refreshMe() {
   const data = await api('/api/me'); state.user = data.user; state.csrf = data.csrf;
   const button = document.getElementById('loginButton');

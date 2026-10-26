@@ -343,6 +343,8 @@ app.post('/api/tournaments/:id/bracket', needUser, needAdmin, wrap(async (req, r
     if (!['open', 'closed'].includes(t.status)) fail(409, 'Нельзя запустить сетку в этом статусе.');
     const { rows: existing } = await db.query('SELECT id FROM matches WHERE tournament_id=$1 LIMIT 1', [t.id]);
     if (existing.length) fail(409, 'Сетка уже создана.');
+    const { rows: pending } = await db.query("SELECT id FROM tournament_entries WHERE tournament_id=$1 AND status='pending' LIMIT 1", [t.id]);
+    if (pending.length) fail(409, 'Сначала рассмотрите все заявки.');
     const { rows: entries } = await db.query("SELECT id FROM tournament_entries WHERE tournament_id=$1 AND status='approved' ORDER BY created_at,id", [t.id]);
     const plan = buildBracket(entries.map(e => e.id), t.format);
     const ids = [];
